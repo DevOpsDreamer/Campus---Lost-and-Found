@@ -1,0 +1,8 @@
+{
+  "name": "CampusTrace",
+  "description": "Enterprise-grade B2B SaaS platform for lost and found asset management.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

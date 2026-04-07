@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python & Backend Exclusions
+venv/
+**/venv/
+backend/uploads/
+*.safetensors
+*.bin
+__pycache__/
