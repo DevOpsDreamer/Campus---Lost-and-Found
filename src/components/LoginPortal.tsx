@@ -30,7 +30,11 @@ export default function LoginPortal() {
       : studentErp.length === 8 && studentPassword.length > 0;
       
     if (isValid) {
-      login('STUDENT', studentLoginMethod === 'email' ? 'EMAIL' : 'ERP');
+      if (studentLoginMethod === 'email') {
+        login('STUDENT', 'EMAIL', `${studentEmailPrefix}@dypvp.edu.in`);
+      } else {
+        login('STUDENT', 'ERP', studentErp);
+      }
     }
   };
 

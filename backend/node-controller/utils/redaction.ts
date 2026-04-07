@@ -35,7 +35,8 @@ export class RedactionPipeline {
       const imageHeight = imageMetadata.height || 0;
 
       // Filter words that match PII regex
-      const wordsToBlur = data.words.filter((word: any) => {
+      const wordsList = data?.words || [];
+      const wordsToBlur = wordsList.filter((word: any) => {
         const text = word.text;
         return this.PAN_REGEX.test(text) || this.AADHAAR_REGEX.test(text);
       });

@@ -51,51 +51,59 @@ router.post('/found', upload.single('image'), async (req: Request, res: Response
 // Calculate Probability Score & Process "Lost" Claim
 router.post('/claim', async (req: Request, res: Response) => {
   try {
-    const { foundAssetId, mySecretKeyDescription, lostLat, lostLng, lostTimestamp } = req.body;
+    const { mySecretKeyDescription, lostLat, lostLng, lostTimestamp } = req.body;
 
-    const foundEvent = await AssetEvent.findById(foundAssetId);
-    if (!foundEvent) {
-      return res.status(404).json({ error: 'Asset not found.' });
+    const allFoundEvents = await AssetEvent.find({ eventType: 'FOUND' });
+    if (!allFoundEvents || allFoundEvents.length === 0) {
+      return res.status(404).json({ error: 'No assets currently in database.' });
     }
 
-    // 1. Calculate Haversine Spatial Score
-    const haversineDist = MatcherUtils.calculateHaversineDistance(
-      parseFloat(lostLat), parseFloat(lostLng), 
-      foundEvent.location.coordinates[1], foundEvent.location.coordinates[0]
-    );
-    const spatialScore = MatcherUtils.calculateSpatialScore(haversineDist);
+    let bestMatch = null;
+    let highestScore = -1;
 
-    // 2. Calculate Temporal Decay
-    const temporalScore = MatcherUtils.calculateTemporalDecay(new Date(lostTimestamp), foundEvent.eventTimestamp);
+    for (const foundEvent of allFoundEvents) {
+      // 1. Calculate Haversine Spatial Score
+      const haversineDist = MatcherUtils.calculateHaversineDistance(
+        parseFloat(lostLat), parseFloat(lostLng), 
+        foundEvent.location.coordinates[1], foundEvent.location.coordinates[0]
+      );
+      const spatialScore = MatcherUtils.calculateSpatialScore(haversineDist);
 
-    // 3. Request VLV AI NLP Evaluation
-    // This calls the Python FastAPI server under the hood (verify-claim)
-    let nlpScore = 0.5; // default fallback
-    try {
-      if (foundEvent.imageUrl && fs.existsSync(foundEvent.imageUrl)) {
-        const vlvResult = await verificationCtrl.processClaimVerification({
-          claimId: foundAssetId,
-          userId: 'REQ-USER-1', // Mock user token
-          imagePath: foundEvent.imageUrl,
-          secretKey: mySecretKeyDescription
-        });
-        nlpScore = vlvResult.confidenceScore;
+      // 2. Calculate Temporal Decay
+      const temporalScore = MatcherUtils.calculateTemporalDecay(new Date(lostTimestamp), foundEvent.eventTimestamp);
+
+      // 3. Request VLV AI NLP Evaluation
+      let nlpScore = 0.5; // default fallback
+      try {
+        if (foundEvent.imageUrl && fs.existsSync(foundEvent.imageUrl)) {
+          const vlvResult = await verificationCtrl.processClaimVerification({
+            claimId: foundEvent._id.toString(),
+            userId: 'REQ-USER-1', // Mock user token
+            imagePath: foundEvent.imageUrl,
+            secretKey: mySecretKeyDescription
+          });
+          nlpScore = vlvResult.confidenceScore;
+        }
+      } catch(aiError) {
+        console.warn("AI Microservice unavailable or errored, falling back to lower confidence weighting.");
       }
-    } catch(aiError) {
-      console.warn("AI Microservice unavailable, falling back to lower confidence weighting.");
+
+      // 4. Unified Spatiotemporal Mathematical Math
+      const unifiedSPS = MatcherUtils.calculateUnifiedScore(spatialScore, temporalScore, nlpScore);
+      console.log(`[Claims API] Eval Item ${foundEvent._id} | Dist: ${Math.round(haversineDist)}m | UNIFIED: ${unifiedSPS.toFixed(2)}`);
+
+      if (unifiedSPS > highestScore) {
+        highestScore = unifiedSPS;
+        bestMatch = foundEvent;
+      }
     }
 
-    // 4. Unified Spatiotemporal Mathematical Math
-    const unifiedSPS = MatcherUtils.calculateUnifiedScore(spatialScore, temporalScore, nlpScore);
-    
-    console.log(`[Claims API] Eval | Dist: ${Math.round(haversineDist)}m, Spatial: ${spatialScore.toFixed(2)}, Temp: ${temporalScore.toFixed(2)}, NLP: ${nlpScore.toFixed(2)} => UNIFIED: ${unifiedSPS.toFixed(2)}`);
-
-    if (unifiedSPS > 0.75) {
-      return res.json({ status: 'APPROVED', message: 'Match confidence high. Proceed to pickup.', score: unifiedSPS });
-    } else if (unifiedSPS < 0.3) {
-      return res.json({ status: 'REJECTED', message: 'Match failed. Trust penalty applied.', score: unifiedSPS });
+    if (highestScore > 0.75) {
+      return res.json({ status: 'APPROVED', message: 'Match confidence high. Proceed to pickup.', score: highestScore, matchId: bestMatch?._id });
+    } else if (highestScore < 0.3) {
+      return res.json({ status: 'REJECTED', message: 'Match failed against all items. Trust penalty applied.', score: highestScore });
     } else {
-      return res.json({ status: 'PROVISIONAL', message: 'Manual security review flagged.', score: unifiedSPS });
+      return res.json({ status: 'PROVISIONAL', message: 'Manual security review flagged.', score: highestScore, matchId: bestMatch?._id });
     }
 
   } catch (err) {

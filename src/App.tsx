@@ -180,11 +180,37 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
 function AppContent() {
   const { userRole, isVerified } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'found' | 'lost' | 'profile' | 'intake' | 'inventory' | 'audit' | 'qr-assets' | 'flagged-users'>('home');
-  const [items, setItems] = useState<FoundItem[]>(INITIAL_ITEMS);
+  const [items, setItems] = useState<FoundItem[]>([]);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>(INITIAL_PENDING_ITEMS);
   const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [selectedItem, setSelectedItem] = useState<FoundItem | null>(null);
+
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/claims/inventory');
+        if (response.ok) {
+          const dbItems = await response.json();
+          const mappedItems = dbItems.map((dbItem: any) => ({
+            id: dbItem._id,
+            title: 'Logged Item',
+            category: dbItem.extractedTags?.[0] || 'Unknown',
+            location: `GPS: ${dbItem.location.coordinates[1].toFixed(4)}, ${dbItem.location.coordinates[0].toFixed(4)}`, // Lat, Lng
+            timeAgo: new Date(dbItem.eventTimestamp).toLocaleString(),
+            status: 'Processing',
+            imageUrl: dbItem.imageUrl ? `http://127.0.0.1:5000/${dbItem.imageUrl.replace('\\', '/')}` : 'https://placehold.co/400x300?text=Processing...'
+          }));
+          setItems(mappedItems);
+        }
+      } catch (err) {
+        console.error("Failed to fetch inventory from backend.");
+      }
+    };
+    if (activeTab === 'home') {
+      fetchInventory();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (userRole === 'SECURITY' && ['home', 'found', 'lost'].includes(activeTab)) {

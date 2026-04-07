@@ -31,15 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ocrAttempts, setOcrAttempts] = useState<number>(0);
   const [profile, setProfile] = useState<UserProfile>({ name: '', erp: '', email: '' });
 
-  const login = (role: Role, method: LoginMethod = 'EMAIL') => {
+  const login = (role: Role, method: LoginMethod = 'EMAIL', explicitId: string = '') => {
     setUserRole(role);
     setLoginMethod(method);
     setIsVerified(false);
     setOcrAttempts(0);
     setProfile({ 
       name: '', 
-      erp: method === 'ERP' ? '12345678' : '', 
-      email: method === 'EMAIL' ? 'student@dypvp.edu.in' : '' 
+      erp: method === 'ERP' ? (explicitId || '12345678') : '', 
+      email: method === 'EMAIL' ? (explicitId || 'student@dypvp.edu.in') : '' 
     });
   };
 

@@ -3,25 +3,58 @@ import { Lock, Mail, UploadCloud, ShieldAlert, CheckCircle, X, ShieldCheck } fro
 import { useAuth } from '../contexts/AuthContext';
 
 export default function VerificationModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const { isVerified, userRole, loginMethod, verifyUser, ocrAttempts, incrementOcrAttempts } = useAuth();
+  const { isVerified, userRole, loginMethod, verifyUser, ocrAttempts, incrementOcrAttempts, profile } = useAuth();
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [overrideCode, setOverrideCode] = useState('');
 
+  const [isVerifying, setIsVerifying] = useState(false);
+
   if (!isOpen || isVerified) return null;
 
-  const handleSendOtp = () => {
-    setEmailSent(true);
+  const handleSendOtp = async () => {
+    setIsVerifying(true);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: profile.email })
+      });
+      if (response.ok) {
+        setEmailSent(true);
+      } else {
+        alert('Authentication microservice is down. Please check backend logs.');
+      }
+    } catch {
+      alert('Cannot connect to authentication backend.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp === '1234') {
-      verifyUser();
-      onClose();
-    } else {
+    setIsVerifying(true);
+    setOtpError(false);
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: profile.email, otp: otp })
+      });
+      if (response.ok) {
+        verifyUser();
+        onClose();
+      } else {
+        setOtpError(true);
+      }
+    } catch {
+      alert('Verification server timeout.');
       setOtpError(true);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -101,23 +134,25 @@ export default function VerificationModal({ isOpen, onClose }: { isOpen: boolean
                       <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl">
                         <Mail size={32} className="text-slate-400 mx-auto mb-3" />
                         <h3 className="font-bold text-slate-900 mb-1">Email Verification</h3>
-                        <p className="text-xs text-slate-500 font-medium">
-                          We need to verify your @dypvp.edu.in email address.
+                        <p className="text-xs text-slate-500 font-medium break-words px-2">
+                          We need to verify your institutional email address: <br/>
+                          <strong className="text-slate-800">{profile.email}</strong>
                         </p>
                       </div>
                       <button 
                         onClick={handleSendOtp}
-                        className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md hover:bg-slate-800 active:bg-black transition-colors flex items-center justify-center gap-2"
+                        disabled={isVerifying}
+                        className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md hover:bg-slate-800 active:bg-black transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         <Mail size={18} />
-                        Send OTP to Email
+                        {isVerifying ? 'Generating OTP...' : 'Send OTP to Email'}
                       </button>
                     </div>
                   ) : (
                     <form onSubmit={handleVerifyOtp} className="space-y-4 text-center">
                       <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-col items-center gap-2 mb-2">
                         <CheckCircle size={24} className="text-emerald-500" />
-                        <p className="text-sm font-bold text-emerald-800">OTP Sent to @dypvp.edu.in</p>
+                        <p className="text-sm font-bold text-emerald-800 break-all text-center">OTP Sent to {profile.email}</p>
                       </div>
                       
                       <div className="space-y-2 text-left">
@@ -138,10 +173,10 @@ export default function VerificationModal({ isOpen, onClose }: { isOpen: boolean
 
                       <button 
                         type="submit"
-                        disabled={otp.length !== 4}
+                        disabled={otp.length !== 4 || isVerifying}
                         className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md hover:bg-slate-800 active:bg-black transition-colors disabled:opacity-50"
                       >
-                        Verify OTP
+                        {isVerifying ? 'Verifying Identity...' : 'Verify OTP'}
                       </button>
                     </form>
                   )}
