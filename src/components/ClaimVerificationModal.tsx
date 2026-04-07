@@ -2,26 +2,46 @@ import React, { useState } from 'react';
 import { Shield, Lock, Loader2, CheckCircle, X, AlertTriangle, XCircle } from 'lucide-react';
 
 interface Props {
+  assetId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function ClaimVerificationModal({ onClose, onSuccess }: Props) {
+export default function ClaimVerificationModal({ assetId, onClose, onSuccess }: Props) {
   const [secretKey, setSecretKey] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [result, setResult] = useState<'idle' | 'success' | 'provisional' | 'failed'>('idle');
-  const [simulatedScore, setSimulatedScore] = useState<'high' | 'medium' | 'low'>('high');
+  const [scoreInfo, setScoreInfo] = useState('');
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (!secretKey.trim()) return;
     setIsVerifying(true);
-    // Simulate VLV microservice processing time
-    setTimeout(() => {
+    
+    try {
+      const resp = await fetch(`http://127.0.0.1:5000/api/claims/${assetId}/verify-direct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secretKey })
+      });
+
+      if (!resp.ok) throw new Error('Verification failed.');
+
+      const data = await resp.json();
+      setScoreInfo(`[Verified Score: ${data.confidenceScore.toFixed(2)}]`);
+
+      if (data.status === 'APPROVED') {
+        setResult('success');
+      } else if (data.status === 'PROVISIONAL') {
+        setResult('provisional');
+      } else {
+        setResult('failed');
+      }
+    } catch {
+      alert("Failed to reach mathematical logic engine. Is Python VLV running?");
+      setResult('failed');
+    } finally {
       setIsVerifying(false);
-      if (simulatedScore === 'high') setResult('success');
-      else if (simulatedScore === 'medium') setResult('provisional');
-      else setResult('failed');
-    }, 1500);
+    }
   };
 
   return (
@@ -89,50 +109,7 @@ export default function ClaimVerificationModal({ onClose, onSuccess }: Props) {
                 </button>
               </div>
 
-              {/* Developer Testing Menu */}
-              <div className="mt-6 pt-4 border-t border-slate-200">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  Developer Testing: Simulate VLV Score
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer hover:text-slate-900 transition-colors">
-                    <input 
-                      type="radio" 
-                      name="simScore" 
-                      value="high" 
-                      checked={simulatedScore === 'high'} 
-                      onChange={() => setSimulatedScore('high')}
-                      className="accent-emerald-600 w-4 h-4"
-                      disabled={isVerifying}
-                    />
-                    High (&gt; 0.85)
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer hover:text-slate-900 transition-colors">
-                    <input 
-                      type="radio" 
-                      name="simScore" 
-                      value="medium" 
-                      checked={simulatedScore === 'medium'} 
-                      onChange={() => setSimulatedScore('medium')}
-                      className="accent-amber-600 w-4 h-4"
-                      disabled={isVerifying}
-                    />
-                    Med (0.4-0.85)
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer hover:text-slate-900 transition-colors">
-                    <input 
-                      type="radio" 
-                      name="simScore" 
-                      value="low" 
-                      checked={simulatedScore === 'low'} 
-                      onChange={() => setSimulatedScore('low')}
-                      className="accent-red-600 w-4 h-4"
-                      disabled={isVerifying}
-                    />
-                    Low (&lt; 0.4)
-                  </label>
-                </div>
-              </div>
+
             </>
           )}
 
@@ -142,6 +119,7 @@ export default function ClaimVerificationModal({ onClose, onSuccess }: Props) {
                 <CheckCircle size={32} className="text-emerald-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Match Confirmed</h3>
+              <p className="text-xs font-bold text-emerald-600 mb-2">{scoreInfo}</p>
               <p className="text-sm text-slate-600 font-medium max-w-[280px]">
                 Your description semantically matches the secure log. You have successfully verified ownership.
               </p>
@@ -160,6 +138,7 @@ export default function ClaimVerificationModal({ onClose, onSuccess }: Props) {
                 <AlertTriangle size={32} className="text-amber-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Provisional Match</h3>
+              <p className="text-xs font-bold text-amber-600 mb-2">{scoreInfo}</p>
               <p className="text-sm text-slate-600 font-medium max-w-[280px]">
                 Visual Verification Required. The AI could not definitively confirm your detail. You may proceed, but you must physically demonstrate this detail to the security officer.
               </p>
@@ -178,6 +157,7 @@ export default function ClaimVerificationModal({ onClose, onSuccess }: Props) {
                 <XCircle size={32} className="text-red-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Verification Failed</h3>
+              <p className="text-xs font-bold text-red-600 mb-2">{scoreInfo}</p>
               <p className="text-sm text-slate-600 font-medium max-w-[280px]">
                 Security Alert: The detail provided does not match the secure visual log. Your claim has been rejected and flagged.
               </p>

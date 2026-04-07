@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "concurrently \"npm run dev\" \"npm run dev:backend\" \"npm run dev:ai\"",
     "dev": "vite --port=3000 --host=0.0.0.0",
     "dev:backend": "tsx watch backend/node-controller/server.ts",
+    "dev:ai": "cd backend/python-vlv-service && .\\venv\\Scripts\\uvicorn main:app --port 8000",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -37,6 +39,7 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "get-port": "^7.2.0",
     "nodemon": "^3.1.14",
     "tailwindcss": "^4.1.14",

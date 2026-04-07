@@ -10,7 +10,16 @@ import { createWorker } from 'tesseract.js';
  * Systematically blurs detected Indian identification markers (PAN / Aadhaar)
  */
 export class RedactionPipeline {
-  
+  private static worker: any = null;
+
+  public static async initialize() {
+    if (!this.worker) {
+      console.log('[Redaction] Booting DPDP OCR Engine into persistent memory...');
+      this.worker = await createWorker('eng');
+      console.log('[Redaction] OCR Engine pre-loaded successfully.');
+    }
+  }
+
   // Strict regular expressions for Indian Govt Identification
   private static readonly PAN_REGEX = /[A-Z]{5}[0-9]{4}[A-Z]{1}/g;
   private static readonly AADHAAR_REGEX = /\d{4}\s?\d{4}\s?\d{4}/g;
@@ -23,12 +32,13 @@ export class RedactionPipeline {
   public static async processAndRedact(inputImagePath: string, outputImagePath: string): Promise<boolean> {
     try {
       console.log(`[Redaction] Starting DPDP pipeline for ${inputImagePath}`);
-      
-      const worker = await createWorker('eng');
-      
-      // Run OCR to get text and bounding box locations
-      const { data }: any = await worker.recognize(inputImagePath);
-      await worker.terminate();
+
+      if (!this.worker) {
+        await this.initialize();
+      }
+
+      // Run OCR using persistent worker
+      const { data }: any = await this.worker.recognize(inputImagePath);
 
       const imageMetadata = await sharp(inputImagePath).metadata();
       const imageWidth = imageMetadata.width || 0;

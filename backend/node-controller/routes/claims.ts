@@ -28,11 +28,15 @@ router.post('/found', upload.single('image'), async (req: Request, res: Response
     const redactedPath = imagePath + '-redacted.jpg';
     const wasRedacted = await RedactionPipeline.processAndRedact(imagePath, redactedPath);
 
+    // 2. Invoke VLV Microservice to extract Tags
+    const absoluteImagePath = path.resolve(wasRedacted ? redactedPath : imagePath);
+    const aiTags = await verificationCtrl.processTagExtraction(absoluteImagePath);
+
     // Save DPDP compliant event
     const event = new AssetEvent({
       eventType: 'FOUND',
       location: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-      extractedTags: ['MANUAL_ENTRY'], // normally populated by python GLiNER
+      extractedTags: aiTags,
       eventTimestamp: new Date(),
       piiRedacted: wasRedacted,
       secretKey: secretKey,
@@ -109,6 +113,36 @@ router.post('/claim', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Evaluation pipeline failed.' });
+  }
+});
+
+// Direct verification of a specific asset using the VLV Challenge (for Secure Item View)
+router.post('/:id/verify-direct', async (req: Request, res: Response) => {
+  try {
+    const assetId = req.params.id;
+    const { secretKey } = req.body;
+
+    const foundEvent = await AssetEvent.findById(assetId);
+    if (!foundEvent) {
+      return res.status(404).json({ error: 'Asset not found.' });
+    }
+
+    if (!foundEvent.imageUrl) {
+      return res.status(400).json({ error: 'No image attached to this asset for VLV comparison.' });
+    }
+
+    const absoluteImagePath = path.resolve(foundEvent.imageUrl);
+    const vlvResult = await verificationCtrl.processClaimVerification({
+      claimId: foundEvent._id.toString(),
+      userId: 'CLAIMANT-1',
+      imagePath: absoluteImagePath,
+      secretKey: secretKey
+    });
+
+    res.json(vlvResult);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Secure Verification Pipeline Failed.' });
   }
 });
 

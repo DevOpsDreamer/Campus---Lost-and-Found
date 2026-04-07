@@ -25,13 +25,9 @@ export default function SecureItemDetail({ item, onBack }: Props) {
     setShowClaimVerification(true);
   };
 
-  // Mock GLINER tags based on category and title
+  // We use the live tags sent by Python VLV Backend!
   const getTags = () => {
-    const base = [item.category.toUpperCase()];
-    if (item.title.includes('MacBook')) return [...base, 'APPLE', 'LAPTOP', 'SILVER', '14-INCH'];
-    if (item.title.includes('Hydroflask')) return [...base, 'WATER BOTTLE', 'BLUE', 'METAL'];
-    if (item.title.includes('ID')) return [...base, 'CARD', 'PLASTIC', 'OFFICIAL'];
-    return [...base, 'UNKNOWN_ATTR'];
+    return item.tags && item.tags.length > 0 ? item.tags : [item.category.toUpperCase(), 'UNKNOWN_ATTR'];
   };
 
   if (showTicket) {
@@ -165,6 +161,7 @@ export default function SecureItemDetail({ item, onBack }: Props) {
       {/* Verification Modal */}
       {showClaimVerification && (
         <ClaimVerificationModal 
+          assetId={item.id}
           onClose={() => setShowClaimVerification(false)} 
           onSuccess={() => {
             setShowClaimVerification(false);

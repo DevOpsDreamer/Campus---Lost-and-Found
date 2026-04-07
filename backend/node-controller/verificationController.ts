@@ -48,8 +48,8 @@ export class VerificationController {
   private readonly vlvServiceUrl: string;
 
   constructor() {
-    // URL of the internal Python FastAPI microservice (e.g., http://vlv-service:8000)
-    this.vlvServiceUrl = process.env.VLV_SERVICE_URL || 'http://localhost:8000';
+    // URL of the internal Python FastAPI microservice (Use 127.0.0.1 to avoid Windows IPv6 localhost bugs)
+    this.vlvServiceUrl = process.env.VLV_SERVICE_URL || 'http://127.0.0.1:8000';
   }
 
   /**
@@ -117,6 +117,29 @@ export class VerificationController {
     } catch (error) {
       console.error(`[Controller] Error during verification routing:`, error);
       throw new Error('Internal Verification Pipeline Error');
+    }
+  }
+
+  /**
+   * Pings python backend to extract tags on initial POST /found
+   */
+  public async processTagExtraction(imagePath: string): Promise<string[]> {
+    try {
+      const vlvResponse = await fetch(`${this.vlvServiceUrl}/api/v1/extract-found-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_path: imagePath })
+      });
+
+      if (!vlvResponse.ok) {
+        throw new Error('Ext tag failure');
+      }
+
+      const data = await vlvResponse.json() as { tags: string[] };
+      return data.tags || ['AWAITING_AI'];
+    } catch (e) {
+      console.error("[Controller] AI Extraction failed, using fallback tag.");
+      return ['MANUAL_ENTRY'];
     }
   }
 }

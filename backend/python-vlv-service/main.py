@@ -72,6 +72,12 @@ class VerificationResponse(BaseModel):
 # -------------------------------------------------------------------
 # API Endpoints
 # -------------------------------------------------------------------
+class ExtractionRequest(BaseModel):
+    image_path: str = Field(..., description="Absolute path to the image on the secure local volume")
+
+class ExtractionResponse(BaseModel):
+    tags: list[str] = Field(default=[], description="Comma separated tags extracted by VLM")
+    is_error: bool = False
 @app.get("/health")
 async def health_check():
     return {
@@ -136,3 +142,38 @@ async def verify_claim(req: VerificationRequest):
     except Exception as e:
         logger.error(f"Error during AI inference: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal AI inference error.")
+
+@app.post("/api/v1/extract-found-tags", response_model=ExtractionResponse)
+async def extract_found_tags(req: ExtractionRequest):
+    """
+    Extrapolates 5 descriptive visual tags from a newly found image.
+    """
+    logger.info(f"Extracting tags for image: {req.image_path}")
+    
+    if vlm_model is None or vlm_tokenizer is None:
+        raise HTTPException(status_code=503, detail="VLM Model is not currently fully loaded.")
+
+    if not os.path.exists(req.image_path):
+        raise HTTPException(status_code=404, detail="Image file not found on local volume.")
+
+    try:
+        image = Image.open(req.image_path).convert("RGB")
+        
+        prompt = "Describe the primary object in this image directly using exactly 5 comma-separated keywords (e.g. Laptop, Black, Apple, Electronics, MacBook). Do not write sentences."
+        
+        enc_image = vlm_model.encode_image(image)
+        response_text = vlm_model.answer_question(enc_image, prompt, vlm_tokenizer)
+        
+        # Clean and split the tags
+        tags = [tag.strip().upper() for tag in response_text.split(",") if tag.strip()]
+        
+        # Fallback if VLM formats badly
+        if not tags or len(tags) == 0:
+            tags = ["UNKNOWN_ITEM"]
+            
+        logger.info(f"Tags extracted: {tags}")
+        return ExtractionResponse(tags=tags)
+
+    except Exception as e:
+        logger.error(f"Error during tag extraction: {str(e)}")
+        raise HTTPException(status_code=500, detail="Tag extraction failed.")

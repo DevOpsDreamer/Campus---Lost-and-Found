@@ -5,6 +5,7 @@ import cors from 'cors';
 import claimsRoutes from './routes/claims';
 import iotRoutes from './routes/iot';
 import authRoutes from './routes/auth';
+import { RedactionPipeline } from './utils/redaction';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,8 +28,10 @@ app.use('/backend/uploads', express.static(path.join(process.cwd(), 'backend', '
 // Connect to MongoDB
 const mongoURI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/campustrace';
 
-mongoose.connect(mongoURI).then(() => {
+mongoose.connect(mongoURI).then(async () => {
   console.log('[Server] Successfully connected to MongoDB');
+  // Boot the heavy OCR engine immediately so students don't have to wait 20 seconds.
+  await RedactionPipeline.initialize();
   app.listen(PORT, () => {
     console.log(`[Server] Node Controller running on port ${PORT}`);
   });

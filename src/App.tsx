@@ -28,6 +28,7 @@ export interface FoundItem {
   timeAgo: string;
   status: string;
   imageUrl: string;
+  tags?: string[];
 }
 
 export interface Claim {
@@ -196,6 +197,7 @@ function AppContent() {
             id: dbItem._id,
             title: 'Logged Item',
             category: dbItem.extractedTags?.[0] || 'Unknown',
+            tags: dbItem.extractedTags || [],
             location: `GPS: ${dbItem.location.coordinates[1].toFixed(4)}, ${dbItem.location.coordinates[0].toFixed(4)}`, // Lat, Lng
             timeAgo: new Date(dbItem.eventTimestamp).toLocaleString(),
             status: 'Processing',
